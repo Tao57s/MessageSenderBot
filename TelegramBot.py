@@ -3,162 +3,52 @@ import asyncio
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.client.session.aiohttp import AiohttpSession  # <-- ПРАВИЛЬНЫЙ ИМПОРТ
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.default import DefaultBotProperties
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, BigInteger, String, select, delete
 
-# ========== ЗАГРУЗКА ПЕРЕМЕННЫХ ==========
+# Импортируем общую логику БД
+from database import (
+    init_db, is_allowed, add_user, remove_user, get_all_users,
+    add_chat, remove_chat, toggle_chat, get_active_chats, get_all_chats
+)
+
 load_dotenv()
 
 # ========== НАСТРОЙКИ ==========
-BOT_TOKEN = os.getenv("klvhat_sender_bot")
-YOUR_TELEGRAM_ID = os.getenv("TelegramId")
-DATABASE_URL = os.getenv("klvhat_sender_db")
-
-# ========== ПРОВЕРКА ПЕРЕМЕННЫХ ==========
-print("📊 Проверка переменных:")
-print(f"klvhat_sender_bot: {'✅' if BOT_TOKEN else '❌'}")
-print(f"TelegramId: {'✅' if YOUR_TELEGRAM_ID else '❌'}")
-print(f"klvhat_sender_db: {'✅' if DATABASE_URL else '❌'}")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", 0))
+PROXY_URL = os.getenv("PROXY_URL")  # Опционально
 
 if not BOT_TOKEN:
-    raise ValueError("❌ klvhat_sender_bot не найден!")
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN не найден!")
+if not ADMIN_TELEGRAM_ID:
+    raise ValueError("❌ ADMIN_TELEGRAM_ID не найден!")
 
-if not YOUR_TELEGRAM_ID:
-    raise ValueError("❌ TelegramId не найден!")
+# ========== НАСТРОЙКА БОТА ==========
+PLATFORM = "telegram"
+
+bot = None
+if PROXY_URL:
+    try:
+        # Попытка создать сессию с прокси. Если прокси некорректен, AiohttpSession
+        # выбросит исключение (например ValueError для неправильного порта).
+        session = AiohttpSession(proxy=PROXY_URL)
+        bot = Bot(token=BOT_TOKEN, session=session, default=DefaultBotProperties())
+    except Exception as e:
+        # В случае ошибки логируем и продолжаем без прокси
+        print(f"⚠️ Не удалось подключить прокси ({PROXY_URL}): {e}\nЗапускаю без прокси.")
+        bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties())
 else:
-    YOUR_TELEGRAM_ID = 1651725645
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties())
 
-if not DATABASE_URL:
-    raise ValueError("❌ klvhat_sender_db не найден!")
-
-print("✅ Все переменные загружены!")
-
-# ========== НАСТРОЙКА ПРОКСИ ==========
-PROXY_URL = 'socks5://147.45.221.112:1082'  # Ваш прокси
-
-# Правильный способ для aiogram 3.x
-session = AiohttpSession(proxy=PROXY_URL)
-bot = Bot(token=BOT_TOKEN, session=session, default=DefaultBotProperties())
 dp = Dispatcher()
 
-
-
-# ========== ПОДКЛЮЧЕНИЕ К БД ==========
-engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base()
-
-# ========== МОДЕЛИ БД ==========
-class AllowedUser(Base):
-    __tablename__ = "allowed_users"
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(BigInteger, unique=True, nullable=False)
-
-class ForwardChat(Base):
-    __tablename__ = "forward_chats"
-    
-    id = Column(Integer, primary_key=True)
-    chat_id = Column(BigInteger, unique=True, nullable=False)
-    chat_name = Column(String(255), nullable=True)
-    is_active = Column(Integer, default=1)
-
-# ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-async def is_allowed(user_id: int) -> bool:
-    async with async_session() as session:
-        result = await session.execute(
-            select(AllowedUser).where(AllowedUser.user_id == user_id)
-        )
-        return result.scalar_one_or_none() is not None
-
-async def add_user(user_id: int) -> bool:
-    async with async_session() as session:
-        existing = await session.execute(
-            select(AllowedUser).where(AllowedUser.user_id == user_id)
-        )
-        if existing.scalar_one_or_none():
-            return False
-        
-        new_user = AllowedUser(user_id=user_id)
-        session.add(new_user)
-        await session.commit()
-        return True
-
-async def remove_user(user_id: int) -> bool:
-    async with async_session() as session:
-        result = await session.execute(
-            delete(AllowedUser).where(AllowedUser.user_id == user_id)
-        )
-        await session.commit()
-        return result.rowcount > 0
-
-async def get_all_users() -> list[int]:
-    async with async_session() as session:
-        result = await session.execute(select(AllowedUser))
-        users = result.scalars().all()
-        return [user.user_id for user in users]
-
-# ========== РАБОТА С ЧАТАМИ ==========
-async def add_chat(chat_id: int, chat_name: str = None) -> bool:
-    async with async_session() as session:
-        existing = await session.execute(
-            select(ForwardChat).where(ForwardChat.chat_id == chat_id)
-        )
-        if existing.scalar_one_or_none():
-            return False
-        
-        new_chat = ForwardChat(chat_id=chat_id, chat_name=chat_name)
-        session.add(new_chat)
-        await session.commit()
-        return True
-
-async def remove_chat(chat_id: int) -> bool:
-    async with async_session() as session:
-        result = await session.execute(
-            delete(ForwardChat).where(ForwardChat.chat_id == chat_id)
-        )
-        await session.commit()
-        return result.rowcount > 0
-
-async def toggle_chat(chat_id: int, active: bool) -> bool:
-    async with async_session() as session:
-        result = await session.execute(
-            select(ForwardChat).where(ForwardChat.chat_id == chat_id)
-        )
-        chat = result.scalar_one_or_none()
-        if not chat:
-            return False
-        
-        chat.is_active = 1 if active else 0
-        await session.commit()
-        return True
-
-async def get_active_chats() -> list[tuple[int, str]]:
-    async with async_session() as session:
-        result = await session.execute(
-            select(ForwardChat).where(ForwardChat.is_active == 1)
-        )
-        chats = result.scalars().all()
-        return [(chat.chat_id, chat.chat_name or f"Chat {chat.chat_id}") for chat in chats]
-
-async def get_all_chats() -> list[tuple[int, str, bool]]:
-    async with async_session() as session:
-        result = await session.execute(select(ForwardChat))
-        chats = result.scalars().all()
-        return [(chat.chat_id, chat.chat_name or f"Chat {chat.chat_id}", bool(chat.is_active)) for chat in chats]
-
 # ========== КОМАНДЫ ==========
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    if await is_allowed(user_id):
+    if await is_allowed(PLATFORM, user_id):
         await message.reply(
             "✅ Вы в белом списке!\n\n"
             "📤 Отправляйте мне сообщения, и я перешлю их во все активные чаты.\n\n"
@@ -178,7 +68,7 @@ async def cmd_start(message: types.Message):
 async def cmd_add_user(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может добавлять пользователей.")
         return
     
@@ -189,7 +79,7 @@ async def cmd_add_user(message: types.Message):
     
     try:
         new_user_id = int(args[1])
-        if await add_user(new_user_id):
+        if await add_user(PLATFORM, new_user_id):
             await message.reply(f"✅ Пользователь {new_user_id} добавлен!")
         else:
             await message.reply(f"⚠️ Пользователь {new_user_id} уже в списке.")
@@ -200,7 +90,7 @@ async def cmd_add_user(message: types.Message):
 async def cmd_remove_user(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может удалять пользователей.")
         return
     
@@ -211,7 +101,7 @@ async def cmd_remove_user(message: types.Message):
     
     try:
         remove_user_id = int(args[1])
-        if await remove_user(remove_user_id):
+        if await remove_user(PLATFORM, remove_user_id):
             await message.reply(f"✅ Пользователь {remove_user_id} удалён.")
         else:
             await message.reply(f"❌ Пользователь {remove_user_id} не найден.")
@@ -222,11 +112,11 @@ async def cmd_remove_user(message: types.Message):
 async def cmd_list_users(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может просматривать список.")
         return
     
-    users = await get_all_users()
+    users = await get_all_users(PLATFORM)
     if not users:
         await message.reply("📭 Белый список пуст.")
         return
@@ -238,7 +128,7 @@ async def cmd_list_users(message: types.Message):
 async def cmd_add_chat(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может добавлять чаты.")
         return
     
@@ -254,7 +144,7 @@ async def cmd_add_chat(message: types.Message):
         chat_id = int(args[1])
         chat_name = args[2] if len(args) > 2 else None
         
-        if await add_chat(chat_id, chat_name):
+        if await add_chat(PLATFORM, chat_id, chat_name):
             await message.reply(f"✅ Чат {chat_id} добавлен для пересылки!")
         else:
             await message.reply(f"⚠️ Чат {chat_id} уже есть в списке.")
@@ -265,7 +155,7 @@ async def cmd_add_chat(message: types.Message):
 async def cmd_remove_chat(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может удалять чаты.")
         return
     
@@ -276,7 +166,7 @@ async def cmd_remove_chat(message: types.Message):
     
     try:
         chat_id = int(args[1])
-        if await remove_chat(chat_id):
+        if await remove_chat(PLATFORM, chat_id):
             await message.reply(f"✅ Чат {chat_id} удалён из списка.")
         else:
             await message.reply(f"❌ Чат {chat_id} не найден.")
@@ -287,7 +177,7 @@ async def cmd_remove_chat(message: types.Message):
 async def cmd_toggle_chat(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может управлять чатами.")
         return
     
@@ -298,19 +188,20 @@ async def cmd_toggle_chat(message: types.Message):
     
     try:
         chat_id = int(args[1])
+        chats = await get_all_chats(PLATFORM)
+        chat_exists = any(c[0] == chat_id for c in chats)
         
-        async with async_session() as session:
-            result = await session.execute(
-                select(ForwardChat).where(ForwardChat.chat_id == chat_id)
-            )
-            chat = result.scalar_one_or_none()
-            if not chat:
-                await message.reply(f"❌ Чат {chat_id} не найден.")
-                return
-            
-            new_status = not bool(chat.is_active)
+        if not chat_exists:
+            await message.reply(f"❌ Чат {chat_id} не найден.")
+            return
         
-        if await toggle_chat(chat_id, new_status):
+        # Получаем текущий статус
+        for c_id, _, is_active in chats:
+            if c_id == chat_id:
+                new_status = not is_active
+                break
+        
+        if await toggle_chat(PLATFORM, chat_id, new_status):
             status_text = "включён" if new_status else "выключен"
             await message.reply(f"✅ Чат {chat_id} {status_text}.")
         else:
@@ -322,11 +213,11 @@ async def cmd_toggle_chat(message: types.Message):
 async def cmd_list_chats(message: types.Message):
     user_id = message.from_user.id
     
-    if user_id != YOUR_TELEGRAM_ID:
+    if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может просматривать список.")
         return
     
-    chats = await get_all_chats()
+    chats = await get_all_chats(PLATFORM)
     if not chats:
         await message.reply("📭 Список чатов пуст.")
         return
@@ -342,15 +233,16 @@ async def cmd_list_chats(message: types.Message):
     )
 
 # ========== ОСНОВНАЯ ЛОГИКА ПЕРЕСЫЛКИ ==========
+
 @dp.message()
 async def forward_message(message: types.Message):
     user_id = message.from_user.id
     
-    if not await is_allowed(user_id):
+    if not await is_allowed(PLATFORM, user_id):
         await message.reply("❌ У вас нет прав на использование этого бота.")
         return
     
-    active_chats = await get_active_chats()
+    active_chats = await get_active_chats(PLATFORM)
     
     if not active_chats:
         await message.reply("⚠️ Нет активных чатов для пересылки. Добавьте чат через /add_chat")
@@ -379,12 +271,13 @@ async def forward_message(message: types.Message):
         await message.reply(f"❌ Не удалось переслать ни в один чат.\n\nОшибки:\n" + "\n".join(error_chats))
 
 # ========== ЗАПУСК ==========
+
 async def main():
     await init_db()
-    print("🤖 Бот запущен!")
-    print(f"👥 Админ: {YOUR_TELEGRAM_ID}")
+    print("🤖 Telegram бот запущен!")
+    print(f"👥 Админ: {ADMIN_TELEGRAM_ID}")
     
-    chats = await get_active_chats()
+    chats = await get_active_chats(PLATFORM)
     print(f"📤 Активных чатов для пересылки: {len(chats)}")
     for chat_id, name in chats:
         print(f"   - {name} (ID: {chat_id})")
