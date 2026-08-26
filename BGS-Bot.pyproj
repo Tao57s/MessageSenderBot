@@ -22,7 +22,9 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="database.py" />
     <Compile Include="MaxBot.py" />
+    <Compile Include="Run.py" />
     <Compile Include="TelegramBot.py" />
     <Compile Include="VkBot.py" />
   </ItemGroup>

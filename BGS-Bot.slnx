@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/Элементы решения/">
     <File Path=".env" />
+    <File Path=".env.example" />
+    <File Path="init.sql" />
   </Folder>
   <Project Path="BGS-Bot.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="550741b4-45d9-453f-9ab2-690fbe46f7dc">
     <Build Project="false" />
