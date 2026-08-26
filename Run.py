@@ -90,6 +90,11 @@ class BotManager:
             logger.info("✅ Max бот зарегистрирован")
         
         if ENABLE_VK:
+            if vk_bot is None:
+                raise RuntimeError(
+                    "VK бот не инициализирован. Проверьте VK_GROUP_TOKEN, "
+                    "VK_GROUP_ID и доступ к API VK."
+                )
             self.bots['vk'] = {
                 'name': 'VK',
                 'bot': vk_bot,
@@ -182,7 +187,7 @@ class BotManager:
                 pass
             if vk_instance and vk_instance.longpoll:
                 def _vk_listen_loop(vk_inst):
-                    from VkBot import VkEventType, handle_vk_message
+                    from VkBot import VkBotEventType, handle_vk_message
                     for event in vk_inst.longpoll.listen():
                         # Попытка корректно завершить цикл при установке shutdown_event
                         try:
@@ -190,11 +195,13 @@ class BotManager:
                                 break
                         except Exception:
                             pass
-                        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                        if event.type == VkBotEventType.MESSAGE_NEW:
                             handle_vk_message(event, vk_inst)
 
                 # Запускаем блокирующий слушатель в отдельном потоке
                 await asyncio.to_thread(_vk_listen_loop, vk_instance)
+            else:
+                raise RuntimeError("VK Long Poll не инициализирован.")
         except Exception as e:
             logger.error(f"❌ VK бот остановлен с ошибкой: {e}")
             raise

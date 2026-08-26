@@ -3,8 +3,8 @@ import asyncio
 import vk_api
 import signal
 import sys
+from types import SimpleNamespace
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
-from vk_api.longpoll import VkLongPoll, VkEventType
 from dotenv import load_dotenv
 from database import (
     init_db, is_allowed, add_user, remove_user, get_all_users,
@@ -20,20 +20,24 @@ MAIN_LOOP = None
 VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN")
 ADMIN_VK_ID = int(os.getenv("ADMIN_VK_ID", 0))
 VK_API_VERSION = os.getenv("VK_API_VERSION")
+VK_GROUP_ID = int(os.getenv("VK_GROUP_ID", 0))
 
 if not VK_GROUP_TOKEN:
     raise ValueError("❌ VK_GROUP_TOKEN не найден!")
 if not ADMIN_VK_ID:
     raise ValueError("❌ ADMIN_VK_ID не найден!")
+if not VK_GROUP_ID:
+    raise ValueError("❌ VK_GROUP_ID не найден!")
 
 PLATFORM = "vk"
 
 
 # ========== КЛИЕНТ ДЛЯ VK ==========
 class VKBot:
-    def __init__(self, token: str, api_version: str):
+    def __init__(self, token: str, api_version: str, group_id: int):
         self.token = token
         self.api_version = api_version
+        self.group_id = group_id
         self.vk_session = None
         self.vk = None
         self.longpoll = None
@@ -43,8 +47,7 @@ class VKBot:
         try:
             self.vk_session = vk_api.VkApi(token=self.token)
             self.vk = self.vk_session.get_api()
-            # Получаем id сообщества, чтобы инициализировать BotLongPoll
-            self.longpoll = VkLongPoll(self.vk_session)
+            self.longpoll = VkBotLongPoll(self.vk_session, self.group_id)
             return self
         except Exception as e:
             print(f"❌ Ошибка инициализации VK: {e}")
@@ -141,7 +144,7 @@ class VKBot:
             return True
         except Exception as e:
             print(f"❌ Ошибка при пересылке: {e}")
-            return False
+            raise
 
 
     def get_chat_info(self, peer_id: int):
@@ -153,7 +156,7 @@ vk_bot = None
 
 # Пытаемся инициализировать VK бота сразу
 try:
-    vk_bot = VKBot(VK_GROUP_TOKEN, VK_API_VERSION).init()
+    vk_bot = VKBot(VK_GROUP_TOKEN, VK_API_VERSION, VK_GROUP_ID).init()
     if vk_bot != None:
         print("✅ VK бот инициализирован успешно")
     else:
@@ -190,6 +193,7 @@ def cmd_start(event, vk_bot_instance):
             "/remove_user <ID> - удалить пользователя\n"
             "/list_users - список пользователей\n"
             "/add_chat <ID> [название] - добавить чат\n"
+            "/peer_id - показать реальный peer_id текущего диалога\n"
             "/remove_chat <ID> - удалить чат\n"
             "/toggle_chat <ID> - включить/выключить чат\n"
             "/list_chats - список чатов"
@@ -306,6 +310,19 @@ def cmd_add_chat(event, vk_bot_instance):
         vk_bot_instance.send_message(user_id, "❌ ID чата должен быть числом.")
 
 
+def cmd_get_peer_id(event, vk_bot_instance):
+    """Вывод реального peer_id текущего диалога VK."""
+    message = f"ℹ️ Реальный peer_id этого диалога: {event.peer_id}"
+    if event.peer_id == event.user_id:
+        vk_bot_instance.send_message(event.user_id, message)
+    else:
+        vk_bot_instance.vk.messages.send(
+            peer_id=event.peer_id,
+            message=message,
+            random_id=0
+        )
+
+
 def cmd_remove_chat(event, vk_bot_instance):
     """Обработчик команды /remove_chat"""
     user_id = event.user_id
@@ -403,7 +420,6 @@ def forward_message_to_chats(event, vk_bot_instance):
     """Пересылка сообщения в активные чаты"""
     user_id = getattr(event, 'user_id', None)
     peer_id = getattr(event, 'peer_id', user_id)
-    message_id = getattr(event, 'message_id', None)
     message_text = getattr(event, 'text', '')
     attachments = getattr(event, 'attachments', None)
 
@@ -435,17 +451,22 @@ def forward_message_to_chats(event, vk_bot_instance):
             # Убедимся, что передаём корректный peer_id в VK: для бесед добавляем 2_000_000_000
             target_peer_id = chat_id if chat_id >= 2000000000 else (2000000000 + chat_id)
 
-            # Если у нас есть message_id, используем forward
-            if message_id:
-                # Передаём source peer_id (peer_id), а не user_id
-                vk_bot_instance.forward_message(target_peer_id, peer_id, message_id)
-            else:
-                # Иначе, отправляем текст + вложения
-                if attachments:
-                    vk_bot_instance.forward_message_to_chat_with_attachments(message_text or '', user_id, target_peer_id, attachments)
-                else:
-                    # Попытка отправить простым сообщением (используем низкоуровневый вызов)
-                    vk_bot_instance.vk.messages.send(peer_id=target_peer_id, message=(message_text or ''), random_id=0)
+            print(
+                f"🔎 Проверка VK-чата: db_chat_id={chat_id}, "
+                f"target_peer_id={target_peer_id}, name={chat_name}"
+            )
+            try:
+                chat_info = vk_bot_instance.vk.messages.getConversationsById(
+                    peer_ids=target_peer_id
+                )
+                print(f"✅ Доступ к чату подтверждён: {chat_info}")
+            except Exception as check_error:
+                print(f"❌ Проверка доступа к чату завершилась ошибкой: {check_error}")
+
+            # Отправляем новое сообщение, чтобы не требовать доступа к исходному диалогу.
+            vk_bot_instance.forward_message_to_chat_with_attachments(
+                message_text or '', user_id, target_peer_id, attachments
+            )
             success_count += 1
         except Exception as e:
             # Если ошибка доступа (917) — сообщаем администратору, что бот не добавлен в беседу
@@ -472,8 +493,26 @@ def forward_message_to_chats(event, vk_bot_instance):
     
     
 # ========== ОБРАБОТЧИК СООБЩЕНИЙ ==========
+def normalize_vk_event(event):
+    """Преобразует событие Bot Long Poll в формат текущих обработчиков."""
+    message = event.message or event.object
+    print(
+        f"📥 VK MESSAGE_NEW: peer_id={message.peer_id}, "
+        f"from_id={message.from_id}, message_id={message.id}, "
+        f"text={message.text!r}, attachments={len(message.attachments or [])}"
+    )
+    return SimpleNamespace(
+        user_id=message.from_id,
+        peer_id=message.peer_id,
+        text=message.text or "",
+        attachments=message.attachments,
+        message_id=message.id,
+    )
+
+
 def handle_vk_message(event, vk_bot_instance):
     """Обработка входящего сообщения из VK"""
+    event = normalize_vk_event(event)
     user_id = event.user_id
     message_text = event.text
     attachments = event.attachments if hasattr(event, 'attachments') else None
@@ -504,6 +543,8 @@ def handle_vk_message(event, vk_bot_instance):
             cmd_list_users(event, vk_bot_instance)
         elif command == "/add_chat":
             cmd_add_chat(event, vk_bot_instance)
+        elif command in ("/peer_id", "/get_peer_id"):
+            cmd_get_peer_id(event, vk_bot_instance)
         elif command == "/remove_chat":
             cmd_remove_chat(event, vk_bot_instance)
         elif command == "/toggle_chat":
@@ -513,6 +554,12 @@ def handle_vk_message(event, vk_bot_instance):
         else:
             vk_bot_instance.send_message(event.user_id, "❌ Неизвестная команда.")
     else:
+        if event.peer_id != user_id:
+            print(
+                f"⏭️ Пересылка пропущена: сообщение пришло из беседы "
+                f"peer_id={event.peer_id}, а не из личного диалога"
+            )
+            return True
         forward_message_to_chats(event, vk_bot_instance)
 #     """Обработка входящего сообщения из VK"""
 #     user_id = event.user_id
@@ -770,7 +817,7 @@ async def main_vk():
 
     try:
         for event in vk_bot.longpoll.listen():
-            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+            if event.type == VkBotEventType.MESSAGE_NEW:
                  handle_vk_message(event, vk_bot)
     except KeyboardInterrupt:
         print("\n🛑 Бот остановлен пользователем")
