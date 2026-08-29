@@ -26,10 +26,13 @@
     <Compile Include="MaxBot.py" />
     <Compile Include="Run.py" />
     <Compile Include="TelegramBot.py" />
-    <Compile Include="Test.py" />
     <Compile Include="VkBot.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include=".dockerignore" />
+    <Content Include="docker-compose.yml" />
+    <Content Include="Dockerfile" />
+    <Content Include="README.md" />
     <Content Include="requirements.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

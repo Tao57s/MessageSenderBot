@@ -16,12 +16,22 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Импорт общих модулей
-from database import init_db, get_active_chats
+from database import init_db, add_user, get_active_chats
 
 # Импорт ботов
-from TelegramBot import bot as telegram_bot, dp as telegram_dp, PLATFORM as TG_PLATFORM
-from MaxBot import bot as max_bot, dp as max_dp, PLATFORM as MAX_PLATFORM
-from VkBot import vk_bot, PLATFORM as VK_PLATFORM
+from TelegramBot import (
+    bot as telegram_bot,
+    dp as telegram_dp,
+    PLATFORM as TG_PLATFORM,
+    ADMIN_TELEGRAM_ID,
+)
+from MaxBot import (
+    bot as max_bot,
+    dp as max_dp,
+    PLATFORM as MAX_PLATFORM,
+    ADMIN_MAX_ID,
+)
+from VkBot import vk_bot, PLATFORM as VK_PLATFORM, ADMIN_VK_ID
 
 # Настройка логирования
 # Попробуем принудительно перевести stdout в UTF-8, чтобы избежать ошибок
@@ -32,7 +42,10 @@ except Exception:
     pass
 
 # Создаём обработчики логирования с указанием кодировки для файла
-file_handler = logging.FileHandler('bot_system.log', encoding='utf-8')
+file_handler = logging.FileHandler(
+    os.getenv('LOG_FILE', 'bot_system.log'),
+    encoding='utf-8'
+)
 stream_handler = logging.StreamHandler(sys.stdout)
 
 logging.basicConfig(
@@ -67,6 +80,20 @@ class BotManager:
         # Инициализация БД
         await init_db()
         logger.info("✅ База данных инициализирована")
+
+        # Администраторы должны быть доступны сразу после запуска,
+        # иначе они не смогут пользоваться командами до ручного добавления.
+        admins = (
+            (TG_PLATFORM, ADMIN_TELEGRAM_ID),
+            (MAX_PLATFORM, ADMIN_MAX_ID),
+            (VK_PLATFORM, ADMIN_VK_ID),
+        )
+        for platform, admin_id in admins:
+            added = await add_user(platform, admin_id)
+            if added:
+                logger.info(f"✅ Администратор {admin_id} добавлен в БД ({platform})")
+            else:
+                logger.info(f"ℹ️ Администратор {admin_id} уже есть в БД ({platform})")
         
         # Регистрация ботов
         if ENABLE_TELEGRAM:
@@ -153,10 +180,7 @@ class BotManager:
         
         logger.info("🔄 Запуск Max бота...")
         try:
-            # Здесь должен быть polling для Max
-            # Пока просто ждем
-            while not self.shutdown_event.is_set():
-                await asyncio.sleep(1)
+            await max_dp.start_polling(max_bot)
         except Exception as e:
             logger.error(f"❌ Max бот остановлен с ошибкой: {e}")
             raise

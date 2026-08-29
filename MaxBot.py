@@ -20,6 +20,8 @@ from maxapi.types import (
     DialogCleared,
     DialogMuted,
     DialogUnmuted,
+    AttachmentPayload,
+    AttachmentUpload,
     ChatButton,  # deprecated: 0.9.14
     MessageChatCreated,  # deprecated: 0.9.14
 )
@@ -290,12 +292,35 @@ async def forward_message(event: MessageCreated):
 
     success_count = 0
     error_chats = []
+    message_text = event.message.body.text
+    message_attachments = []
+    for attachment in event.message.body.attachments or []:
+        attachment_type = getattr(attachment.type, "value", attachment.type)
+        payload = attachment.payload
+
+        if (
+            attachment_type in {"image", "video", "audio", "file"}
+            and payload
+            and hasattr(payload, "token")
+            and payload.token
+        ):
+            message_attachments.append(
+                AttachmentUpload(
+                    type=attachment_type,
+                    payload=AttachmentPayload(token=payload.token),
+                )
+            )
+        else:
+            message_attachments.append(attachment)
+
+    message_attachments = message_attachments or None
     
     for chat_id, chat_name in active_chats:
         try:
             await bot.send_message(
                 chat_id=chat_id,
-                text=event.message.body.text
+                text=message_text,
+                attachments=message_attachments,
             )
             success_count += 1
         except Exception as e:

@@ -106,26 +106,20 @@ class VKBot:
             for attachment in attachments:
                 try:
                     atype = attachment.get('type')
-                    if atype == 'photo':
-                        photo = attachment['photo']
-                        attachment_str = f"photo{photo['owner_id']}_{photo['id']}"
-                        attachment_strings.append(attachment_str)
-                    elif atype == 'video':
-                        video = attachment['video']
-                        attachment_str = f"video{video['owner_id']}_{video['id']}"
-                        attachment_strings.append(attachment_str)
-                    elif atype == 'doc':
-                        doc = attachment['doc']
-                        attachment_str = f"doc{doc['owner_id']}_{doc['id']}"
-                        attachment_strings.append(attachment_str)
-                    elif atype == 'audio':
-                        audio = attachment['audio']
-                        attachment_str = f"audio{audio['owner_id']}_{audio['id']}"
-                        attachment_strings.append(attachment_str)
-                    elif atype == 'wall':
-                        wall = attachment['wall']
-                        attachment_str = f"wall{wall['owner_id']}_{wall['id']}"
-                        attachment_strings.append(attachment_str)
+                    data = attachment.get(atype, {})
+                    if not isinstance(data, dict):
+                        continue
+
+                    owner_id = data.get('owner_id')
+                    object_id = data.get('id')
+                    if owner_id is None or object_id is None:
+                        continue
+
+                    attachment_str = f"{atype}{owner_id}_{object_id}"
+                    access_key = data.get('access_key')
+                    if access_key:
+                        attachment_str += f"_{access_key}"
+                    attachment_strings.append(attachment_str)
                 except Exception:
                     continue
 

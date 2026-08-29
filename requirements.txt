@@ -5,4 +5,4 @@ aiogram==3.30.0
 sqlalchemy==2.0.52
 vk-api==11.10.1
 maxapi==1.2.2
-psycopg2==binary==2.9.12
+psycopg2-binary==2.9.12
