@@ -10,7 +10,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN useradd --create-home --uid 10001 app \
-	&& mkdir -p /app/data \
+	&& mkdir -p /app/data /app/logs \
 	&& chown -R app:app /app
 
 COPY --chown=app:app . .
