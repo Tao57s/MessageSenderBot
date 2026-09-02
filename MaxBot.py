@@ -40,9 +40,9 @@ BOT_TOKEN = os.getenv("MAX_BOT_TOKEN")
 ADMIN_MAX_ID = int(os.getenv("ADMIN_MAX_ID"))
 
 if not BOT_TOKEN:
-    raise ValueError("❌ TELEGRAM_BOT_TOKEN не найден!")
+    raise ValueError("❌ MAX_BOT_TOKEN не найден!")
 if not ADMIN_MAX_ID:
-    raise ValueError("❌ ADMIN_TELEGRAM_ID не найден!")
+    raise ValueError("❌ ADMIN_MAX_ID не найден!")
 
 # ========== НАСТРОЙКА БОТА ==========
 PLATFORM = "max"
@@ -51,6 +51,25 @@ bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 # ========== КОМАНДЫ ==========
+@dp.bot_added()
+async def on_bot_added(event: BotAdded):
+    from_user = await event.fetch_from_user()
+    user_id = from_user.user_id
+    chat = await event.fetch_chat()
+
+    text = (
+        f"ID чата/канала куда добавили бота: <{chat.chat_id}>"
+    )
+    
+    print("trigger")
+
+    await bot.send_message(
+                user_id=ADMIN_MAX_ID,
+                text=text       
+            )
+
+
+
 @dp.message_created(Command("start"))
 async def cmd_start(event: MessageCreated):
     from_user = await event.fetch_from_user()
@@ -339,7 +358,7 @@ async def forward_message(event: MessageCreated):
 
 async def main():
     await init_db()
-    print("🤖 Telegram бот запущен!")
+    print("🤖 MAX бот запущен!")
     print(f"👥 Админ: {ADMIN_MAX_ID}")
 
 
