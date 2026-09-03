@@ -58,9 +58,11 @@ async def on_bot_added(event: types.ChatMemberUpdated):
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     
-    if(message.from_chat_id != user_id):
-        return
     user_id = message.from_user.id
+
+    if(message.chat.id != user_id):
+        return
+    
     if await is_allowed(PLATFORM, user_id):
         await message.reply(
             "✅ Вы в белом списке!\n\n"
@@ -81,7 +83,7 @@ async def cmd_start(message: types.Message):
 async def cmd_add_user(message: types.Message):
     user_id = message.from_user.id
 
-    if(message.from_chat_id != user_id):
+    if(message.chat.id != user_id):
         return
 
     if user_id != ADMIN_TELEGRAM_ID:
@@ -104,11 +106,10 @@ async def cmd_add_user(message: types.Message):
 
 @dp.message(Command("remove_user"))
 async def cmd_remove_user(message: types.Message):
-    
-    if(message.from_chat_id != user_id):
-        return
-
     user_id = message.from_user.id
+
+    if(message.chat.id != user_id):
+        return
     
     if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может удалять пользователей.")
@@ -131,11 +132,11 @@ async def cmd_remove_user(message: types.Message):
 @dp.message(Command("list_users"))
 async def cmd_list_users(message: types.Message):
     
-    if(message.from_chat_id != user_id):
+    user_id = message.from_user.id
+
+    if(message.chat.id != user_id):
         return
 
-    user_id = message.from_user.id
-    
     if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может просматривать список.")
         return
@@ -151,11 +152,11 @@ async def cmd_list_users(message: types.Message):
 @dp.message(Command("add_chat"))
 async def cmd_add_chat(message: types.Message):
 
-
-    
-    if(message.from_chat_id != user_id):
-        return
     user_id = message.from_user.id
+    
+    if(message.chat.id != user_id):
+        return
+    
     
     if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может добавлять чаты.")
@@ -183,10 +184,11 @@ async def cmd_add_chat(message: types.Message):
 @dp.message(Command("remove_chat"))
 async def cmd_remove_chat(message: types.Message):
 
-    
-    if(message.from_chat_id != user_id):
-        return
     user_id = message.from_user.id
+    
+    
+    if(message.chat.id != user_id):
+        return
     
     if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может удалять чаты.")
@@ -209,10 +211,12 @@ async def cmd_remove_chat(message: types.Message):
 @dp.message(Command("toggle_chat"))
 async def cmd_toggle_chat(message: types.Message):
     
-    if(message.from_chat_id != user_id):
+    user_id = message.from_user.id
+
+    if(message.chat.id != user_id):
         return
 
-    user_id = message.from_user.id
+   
     
     if user_id != ADMIN_TELEGRAM_ID:
         await message.reply("❌ Только владелец бота может управлять чатами.")
@@ -250,7 +254,7 @@ async def cmd_toggle_chat(message: types.Message):
 async def cmd_list_chats(message: types.Message):
     user_id = message.from_user.id
     
-    if(message.from_chat_id != user_id):
+    if(message.chat.id != user_id):
         return
 
     if user_id != ADMIN_TELEGRAM_ID:
@@ -333,10 +337,12 @@ async def copy_album(album_key):
 @dp.message()
 async def forward_message(message: types.Message):
     
-    if(message.from_chat_id != user_id):
+    user_id = message.from_user.id
+
+    if(message.chat.id != user_id):
         return
 
-    user_id = message.from_user.id
+    
     
     if not await is_allowed(PLATFORM, user_id):
         await message.reply("❌ У вас нет прав на использование этого бота.")
