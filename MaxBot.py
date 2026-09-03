@@ -58,7 +58,8 @@ async def on_bot_added(event: BotAdded):
     chat = await event.fetch_chat()
 
     text = (
-        f"ID чата/канала куда добавили бота: <{chat.chat_id}>"
+        f"ID чата/канала куда добавили бота: {chat.chat_id}\n"
+        f"/add_chat {chat.chat_id}"
     )
     
     print("trigger")
