@@ -73,6 +73,11 @@ async def on_bot_added(event: BotAdded):
 @dp.message_created(Command("start"))
 async def cmd_start(event: MessageCreated):
     from_user = await event.fetch_from_user()
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if await is_allowed(PLATFORM, from_user.user_id):
         await event.message.reply(
             "✅ Вы в белом списке!\n\n"
@@ -95,6 +100,11 @@ async def cmd_add_user(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
     
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может добавлять пользователей.")
         return
@@ -119,6 +129,11 @@ async def cmd_remove_user(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
 
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может удалять пользователей.")
         return
@@ -142,6 +157,11 @@ async def cmd_list_users(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
 
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может просматривать список.")
         return
@@ -157,6 +177,11 @@ async def cmd_list_users(event: MessageCreated):
 async def cmd_add_chat(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
+
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
 
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может добавлять чаты.")
@@ -186,6 +211,11 @@ async def cmd_remove_chat(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
 
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может удалять пользователей.")
         return
@@ -208,6 +238,11 @@ async def cmd_remove_chat(event: MessageCreated):
 async def cmd_toggle_chat(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
+
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
 
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может управлять чатами.")
@@ -246,6 +281,11 @@ async def cmd_list_chats(event: MessageCreated):
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
 
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     if user_id != ADMIN_MAX_ID:
         await event.message.reply("❌ Только владелец бота может просматривать список.")
         return
@@ -264,24 +304,14 @@ async def cmd_list_chats(event: MessageCreated):
         f"📋 Список чатов для пересылки:\n\n" + "\n".join(chats_text)
     )
 
-@dp.message_created(Command("getid"))
-async def get_ids(event: MessageCreated):
-    from_user = await event.fetch_from_user()
-    user_id = from_user.user_id
-    chat = await event.fetch_chat()
-
-    if not await is_allowed(PLATFORM, user_id):
-        await event.message.reply("❌ У вас нет прав на использование этого бота.")
-        return
-    chat = await event.fetch_chat()
-
-    text = (
-        f"ID этого чата: <b>{chat.chat_id}</b>"
-    )
-    await event.message.answer(text, format=Format.HTML)
-
 @dp.message_created(F.message.body.text[0] =='/')
 async def cmd_unexpected(event: MessageCreated):
+
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
     chat = await event.fetch_chat()
@@ -295,6 +325,12 @@ async def cmd_unexpected(event: MessageCreated):
 
 @dp.message_created()
 async def forward_message(event: MessageCreated):
+
+    from_chat = await event.fetch_chat()
+    if from_chat.chat_id < 0:
+        print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
+        return
+
     from_user = await event.fetch_from_user()
     user_id = from_user.user_id
     chat = await event.fetch_chat()
