@@ -84,8 +84,8 @@ async def cmd_start(event: MessageCreated):
             "/add_chat <ID> [название] - добавить чат\n"
             "/remove_chat <ID> - удалить чат\n"
             "/toggle_chat <ID> - включить/выключить чат\n"
-            "/list_chats - список чатов"
-            "/getid - получение Id чата"
+            "/list_chats - список чатов\n"
+            f"Ваш ID: {from_user.user_id}"
         )
     else:
         await event.message.reply("❌ У вас нет прав. Обратитесь к администратору.")
