@@ -93,7 +93,8 @@ async def cmd_start(event: MessageCreated):
             f"Ваш ID: {from_user.user_id}"
         )
     else:
-        await event.message.reply("❌ У вас нет прав. Обратитесь к администратору.")
+        await event.message.reply("❌ У вас нет прав. Обратитесь к администратору.\n"
+                                  f"Ваш ID: {from_user.user_id}")
 
 @dp.message_created(Command("add_user"))
 async def cmd_add_user(event: MessageCreated):
