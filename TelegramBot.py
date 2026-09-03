@@ -244,6 +244,62 @@ async def cmd_list_chats(message: types.Message):
 
 # ========== ОСНОВНАЯ ЛОГИКА ПЕРЕСЫЛКИ ==========
 
+album_messages = {}
+album_tasks = {}
+album_lock = asyncio.Lock()
+
+
+async def copy_messages_to_chats(messages: list[types.Message]):
+    active_chats = await get_active_chats(PLATFORM)
+
+    if not active_chats:
+        await messages[0].reply("⚠️ Нет активных чатов для пересылки. Добавьте чат через /add_chat")
+        return
+
+    success_count = 0
+    error_chats = []
+    message_ids = sorted(message.message_id for message in messages)
+
+    for chat_id, chat_name in active_chats:
+        try:
+            if len(message_ids) == 1:
+                await bot.copy_message(
+                    chat_id=chat_id,
+                    from_chat_id=messages[0].chat.id,
+                    message_id=message_ids[0]
+                )
+            else:
+                await bot.copy_messages(
+                    chat_id=chat_id,
+                    from_chat_id=messages[0].chat.id,
+                    message_ids=message_ids
+                )
+            success_count += 1
+        except Exception as e:
+            error_chats.append(f"{chat_name} (ID: {chat_id}) - {str(e)[:50]}")
+
+    if success_count > 0:
+        report = f"✅ Переслано в {success_count} чатов"
+        if error_chats:
+            report += f"\n\n⚠️ Ошибки:\n" + "\n".join(error_chats)
+        await messages[0].reply(report)
+    else:
+        await messages[0].reply(
+            "❌ Не удалось переслать ни в один чат.\n\nОшибки:\n" + "\n".join(error_chats)
+        )
+
+
+async def copy_album(album_key):
+    await asyncio.sleep(0.8)
+
+    async with album_lock:
+        messages = list(album_messages.pop(album_key, {}).values())
+        album_tasks.pop(album_key, None)
+
+    if messages:
+        await copy_messages_to_chats(messages)
+
+
 @dp.message()
 async def forward_message(message: types.Message):
     user_id = message.from_user.id
@@ -252,33 +308,15 @@ async def forward_message(message: types.Message):
         await message.reply("❌ У вас нет прав на использование этого бота.")
         return
     
-    active_chats = await get_active_chats(PLATFORM)
-    
-    if not active_chats:
-        await message.reply("⚠️ Нет активных чатов для пересылки. Добавьте чат через /add_chat")
+    if message.media_group_id is not None:
+        album_key = (message.chat.id, message.media_group_id)
+        async with album_lock:
+            album_messages.setdefault(album_key, {})[message.message_id] = message
+            if album_key not in album_tasks:
+                album_tasks[album_key] = asyncio.create_task(copy_album(album_key))
         return
-    
-    success_count = 0
-    error_chats = []
-    
-    for chat_id, chat_name in active_chats:
-        try:
-            await bot.forward_message(
-                chat_id=chat_id,
-                from_chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-            success_count += 1
-        except Exception as e:
-            error_chats.append(f"{chat_name} (ID: {chat_id}) - {str(e)[:50]}")
-    
-    if success_count > 0:
-        report = f"✅ Переслано в {success_count} чатов"
-        if error_chats:
-            report += f"\n\n⚠️ Ошибки:\n" + "\n".join(error_chats)
-        await message.reply(report)
-    else:
-        await message.reply(f"❌ Не удалось переслать ни в один чат.\n\nОшибки:\n" + "\n".join(error_chats))
+
+    await copy_messages_to_chats([message])
 
 # ========== ЗАПУСК ==========
 
