@@ -1,8 +1,8 @@
 import os
 import asyncio
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram import Router, Bot, Dispatcher, types
+from aiogram.filters import Command,ChatMemberUpdatedFilter, MEMBER, ADMINISTRATOR, LEFT, KICKED
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.default import DefaultBotProperties
 
@@ -42,8 +42,18 @@ else:
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties())
 
 dp = Dispatcher()
-
+router = Router()  # <-- Добавьте эту строку
+dp.include_router(router)  # <-- И эту
 # ========== КОМАНДЫ ==========
+
+@router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=(LEFT | KICKED) >> (MEMBER | ADMINISTRATOR)))
+async def on_bot_added(event: types.ChatMemberUpdated):
+    # Получаем ID чата
+    chat_id = event.chat.id
+    await bot.send_message(ADMIN_TELEGRAM_ID, f"🤖 Бот успешно добавлен в этот чат/канал {chat_id}!")
+    await bot.send_message(ADMIN_TELEGRAM_ID, f"/add_chat {chat_id}")
+        # Здесь лучше всего сохранять chat_id в базу данных или файл
+    print(f"✅ Бот добавлен в чат/канал с ID: {chat_id}") 
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
