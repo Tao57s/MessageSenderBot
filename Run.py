@@ -14,6 +14,8 @@ import signal
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+from aiogram.types import BotCommand as TelegramBotCommand
+from maxapi.types import BotCommand as MaxBotCommand
 
 # Импорт общих модулей
 from database import init_db, add_user, get_active_chats
@@ -129,6 +131,38 @@ class BotManager:
                 'status': 'ready'
             }
             logger.info("✅ VK бот зарегистрирован")
+
+        if ENABLE_TELEGRAM:
+            try:
+                await telegram_bot.set_my_commands([
+                    types.BotCommand(command="start", description="Главное меню"),
+                    types.BotCommand(command="add_user", description="Добавить пользователя"),
+                    types.BotCommand(command="remove_user", description="Удалить пользователя"),
+                    types.BotCommand(command="list_users", description="Список пользователей"),
+                    types.BotCommand(command="add_chat", description="Добавить чат"),
+                    types.BotCommand(command="remove_chat", description="Удалить чат"),
+                    types.BotCommand(command="toggle_chat", description="Включить или выключить чат"),
+                    types.BotCommand(command="list_chats", description="Список чатов"),
+                ])
+                logger.info("✅ Команды Telegram бота установлены")
+            except Exception as e:
+                logger.error(f"❌ Не удалось установить команды Telegram бота: {e}")
+
+        if ENABLE_MAX:
+            try:
+                await max_bot.set_my_commands(
+                    MaxBotCommand(name="start", description="Главное меню"),
+                    MaxBotCommand(name="add_user", description="Добавить пользователя"),
+                    MaxBotCommand(name="remove_user", description="Удалить пользователя"),
+                    MaxBotCommand(name="list_users", description="Список пользователей"),
+                    MaxBotCommand(name="add_chat", description="Добавить чат"),
+                    MaxBotCommand(name="remove_chat", description="Удалить чат"),
+                    MaxBotCommand(name="toggle_chat", description="Включить или выключить чат"),
+                    MaxBotCommand(name="list_chats", description="Список чатов"),
+                )
+                logger.info("✅ Команды MAX бота установлены")
+            except Exception as e:
+                logger.error(f"❌ Не удалось установить команды MAX бота: {e}")
         
         if not self.bots:
             logger.error("❌ Не зарегистрировано ни одного бота!")
