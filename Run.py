@@ -14,7 +14,7 @@ import signal
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
-from aiogram.types import BotCommand as TelegramBotCommand
+from aiogram import types
 from maxapi.types import BotCommand as MaxBotCommand
 
 # Импорт общих модулей
