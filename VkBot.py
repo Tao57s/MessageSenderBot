@@ -18,14 +18,30 @@ MAIN_LOOP = None
 
 # ========== НАСТРОЙКИ ==========
 VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN")
-ADMIN_VK_ID = int(os.getenv("ADMIN_VK_ID", 0))
+# Поддержка нескольких админов через переменную окружения.
+# Принимаем разделители: запятая, точка с запятой или перевод строки.
+_raw_vk_admins = os.getenv("ADMIN_VK_ID", "")
+def _parse_admins(raw: str):
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.replace(';', ',').replace('\n', ',').split(',') if p.strip()]
+    ids = []
+    for p in parts:
+        try:
+            ids.append(int(p))
+        except ValueError:
+            continue
+    return ids
+
+ADMIN_VK_IDS = _parse_admins(_raw_vk_admins)
+ADMIN_VK_ID = ADMIN_VK_IDS[0] if ADMIN_VK_IDS else 0
 VK_API_VERSION = os.getenv("VK_API_VERSION")
 VK_GROUP_ID = int(os.getenv("VK_GROUP_ID", 0))
 
 if not VK_GROUP_TOKEN:
     raise ValueError("❌ VK_GROUP_TOKEN не найден!")
-if not ADMIN_VK_ID:
-    raise ValueError("❌ ADMIN_VK_ID не найден!")
+if not ADMIN_VK_IDS:
+    raise ValueError("❌ ADMIN_VK_ID не найден! Укажите хотя бы один ID админа через запятую если нужно несколько.")
 if not VK_GROUP_ID:
     raise ValueError("❌ VK_GROUP_ID не найден!")
 
@@ -161,7 +177,7 @@ except Exception as e:
 #============ проверка на права администратора =========
 
 def check_admin(user_id, vk_bot_instance):
-    if user_id != ADMIN_VK_ID:
+    if user_id not in ADMIN_VK_IDS:
         vk_bot_instance.send_message(user_id, "❌ Только Администратор может использовать данные команды.")
         return False
     return True
@@ -467,10 +483,12 @@ def forward_message_to_chats(event, vk_bot_instance):
             err_text = str(e)
             error_chats.append(f"{chat_name} (ID: {chat_id}) - {err_text[:200]}")
             if "917" in err_text or "You don't have access" in err_text:
-                try:
-                    vk_bot_instance.send_message(ADMIN_VK_ID, f"⚠️ Нет доступа к чату {chat_name} (ID: {chat_id}). Добавьте бота в беседу или используйте правильный peer_id.")
-                except Exception:
-                    pass
+                # Уведомляем всех админов
+                for admin in ADMIN_VK_IDS:
+                    try:
+                        vk_bot_instance.send_message(admin, f"⚠️ Нет доступа к чату {chat_name} (ID: {chat_id}). Добавьте бота в беседу или используйте правильный peer_id.")
+                    except Exception:
+                        pass
 
     if success_count > 0:
         report = f"✅ Переслано в {success_count} чатов"
@@ -805,7 +823,7 @@ async def main_vk():
     await init_db()
 
     print("🤖 VK бот запущен!")
-    print(f"👥 Админ: {ADMIN_VK_ID}")
+    print(f"👥 Админы: {ADMIN_VK_IDS}")
     
     print("🔄 Слушаем сообщения VK...")
 

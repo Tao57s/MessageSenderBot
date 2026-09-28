@@ -1,5 +1,6 @@
 import os
 import asyncio
+from html import escape
 from dotenv import load_dotenv
 from aiogram import Router, Bot, Dispatcher, types
 from aiogram.filters import Command,ChatMemberUpdatedFilter, MEMBER, ADMINISTRATOR, LEFT, KICKED
@@ -16,13 +17,30 @@ load_dotenv()
 
 # ========== НАСТРОЙКИ ==========
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", 0))
+_raw_admins = os.getenv("ADMIN_TELEGRAM_ID", "")
+def _parse_admins(raw: str):
+    # Поддерживаем разделители: запятая, точка с запятой или пробел
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.replace(';', ',').replace('\n', ',').split(',') if p.strip()]
+    ids = []
+    for p in parts:
+        try:
+            ids.append(int(p))
+        except ValueError:
+            # Игнорируем нечисловые значения
+            continue
+    return ids
+
+ADMIN_TELEGRAM_IDS = _parse_admins(_raw_admins)
+
+ADMIN_TELEGRAM_ID = ADMIN_TELEGRAM_IDS[0] if ADMIN_TELEGRAM_IDS else 0
 PROXY_URL = os.getenv("PROXY_URL")  # Опционально
 
 if not BOT_TOKEN:
     raise ValueError("❌ TELEGRAM_BOT_TOKEN не найден!")
-if not ADMIN_TELEGRAM_ID:
-    raise ValueError("❌ ADMIN_TELEGRAM_ID не найден!")
+if not ADMIN_TELEGRAM_IDS:
+    raise ValueError("❌ ADMIN_TELEGRAM_ID не найден! Укажите хотя бы один ID админа через запятую если нужно несколько.")
 
 # ========== НАСТРОЙКА БОТА ==========
 PLATFORM = "telegram"
@@ -50,8 +68,13 @@ dp.include_router(router)  # <-- И эту
 async def on_bot_added(event: types.ChatMemberUpdated):
     # Получаем ID чата
     chat_id = event.chat.id
-    await bot.send_message(ADMIN_TELEGRAM_ID, f"🤖 Бот успешно добавлен в этот чат/канал {chat_id}!")
-    await bot.send_message(ADMIN_TELEGRAM_ID, f"/add_chat {chat_id}")
+    for admin in ADMIN_TELEGRAM_IDS:
+        try:
+            await bot.send_message(admin, f"🤖 Бот успешно добавлен в этот чат/канал {chat_id}!")
+            await bot.send_message(admin, f"/add_chat {chat_id}")
+        except Exception:
+            # Игнорируем ошибки отправки отдельному администратору
+            pass
         # Здесь лучше всего сохранять chat_id в базу данных или файл
     print(f"✅ Бот добавлен в чат/канал с ID: {chat_id}") 
 
@@ -86,7 +109,7 @@ async def cmd_add_user(message: types.Message):
     if(message.chat.id != user_id):
         return
 
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может добавлять пользователей.")
         return
     
@@ -111,7 +134,7 @@ async def cmd_remove_user(message: types.Message):
     if(message.chat.id != user_id):
         return
     
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может удалять пользователей.")
         return
     
@@ -137,7 +160,7 @@ async def cmd_list_users(message: types.Message):
     if(message.chat.id != user_id):
         return
 
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может просматривать список.")
         return
     
@@ -158,7 +181,7 @@ async def cmd_add_chat(message: types.Message):
         return
     
     
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может добавлять чаты.")
         return
     
@@ -190,7 +213,7 @@ async def cmd_remove_chat(message: types.Message):
     if(message.chat.id != user_id):
         return
     
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может удалять чаты.")
         return
     
@@ -218,7 +241,7 @@ async def cmd_toggle_chat(message: types.Message):
 
    
     
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может управлять чатами.")
         return
     
@@ -257,7 +280,7 @@ async def cmd_list_chats(message: types.Message):
     if(message.chat.id != user_id):
         return
 
-    if user_id != ADMIN_TELEGRAM_ID:
+    if user_id not in ADMIN_TELEGRAM_IDS:
         await message.reply("❌ Только владелец бота может просматривать список.")
         return
     
@@ -269,11 +292,11 @@ async def cmd_list_chats(message: types.Message):
     chats_text = []
     for chat_id, name, is_active in chats:
         status = "🟢 Активен" if is_active else "🔴 Неактивен"
-        chats_text.append(f"• {name}\n  ID: `{chat_id}`\n  Статус: {status}")
+        chats_text.append(f"• {escape(name or 'Без названия')}\n  ID: <code>{chat_id}</code>\n  Статус: {status}")
     
     await message.reply(
         f"📋 Список чатов для пересылки:\n\n" + "\n".join(chats_text),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 # ========== ОСНОВНАЯ ЛОГИКА ПЕРЕСЫЛКИ ==========
@@ -363,7 +386,7 @@ async def forward_message(message: types.Message):
 async def main():
     await init_db()
     print("🤖 Telegram бот запущен!")
-    print(f"👥 Админ: {ADMIN_TELEGRAM_ID}")
+    print(f"👥 Админы: {ADMIN_TELEGRAM_IDS}")
     
     chats = await get_active_chats(PLATFORM)
     print(f"📤 Активных чатов для пересылки: {len(chats)}")

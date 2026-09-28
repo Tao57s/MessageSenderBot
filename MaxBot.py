@@ -37,12 +37,27 @@ from database import (
 load_dotenv()
 # ========== НАСТРОЙКИ ==========
 BOT_TOKEN = os.getenv("MAX_BOT_TOKEN")
-ADMIN_MAX_ID = int(os.getenv("ADMIN_MAX_ID"))
+_raw_max_admins = os.getenv("ADMIN_MAX_ID", "")
+
+def _parse_admins(raw: str):
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.replace(';', ',').replace('\n', ',').split(',') if p.strip()]
+    ids = []
+    for p in parts:
+        try:
+            ids.append(int(p))
+        except ValueError:
+            continue
+    return ids
+
+ADMIN_MAX_IDS = _parse_admins(_raw_max_admins)
+ADMIN_MAX_ID = ADMIN_MAX_IDS[0] if ADMIN_MAX_IDS else 0
 
 if not BOT_TOKEN:
     raise ValueError("❌ MAX_BOT_TOKEN не найден!")
-if not ADMIN_MAX_ID:
-    raise ValueError("❌ ADMIN_MAX_ID не найден!")
+if not ADMIN_MAX_IDS:
+    raise ValueError("❌ ADMIN_MAX_ID не найден! Укажите хотя бы один ID админа через запятую если нужно несколько.")
 
 # ========== НАСТРОЙКА БОТА ==========
 PLATFORM = "max"
@@ -64,10 +79,15 @@ async def on_bot_added(event: BotAdded):
     
     print("trigger")
 
-    await bot.send_message(
-                user_id=ADMIN_MAX_ID,
-                text=text       
+    for admin in ADMIN_MAX_IDS:
+        try:
+            await bot.send_message(
+                user_id=admin,
+                text=text
             )
+        except Exception:
+            # Игнорируем ошибки отправки отдельному администратору
+            pass
 
 
 
@@ -107,7 +127,7 @@ async def cmd_add_user(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может добавлять пользователей.")
         return
     
@@ -136,7 +156,7 @@ async def cmd_remove_user(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может удалять пользователей.")
         return
     
@@ -164,7 +184,7 @@ async def cmd_list_users(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может просматривать список.")
         return
     users = await get_all_users(PLATFORM)
@@ -185,7 +205,7 @@ async def cmd_add_chat(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может добавлять чаты.")
         return
 
@@ -218,7 +238,7 @@ async def cmd_remove_chat(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может удалять пользователей.")
         return
 
@@ -246,7 +266,7 @@ async def cmd_toggle_chat(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может управлять чатами.")
         return
     args = event.message.body.text.split()
@@ -288,7 +308,7 @@ async def cmd_list_chats(event: MessageCreated):
         print(f"чат бота: {from_chat.chat_id} Id пользователя: {from_user.user_id}")
         return
 
-    if user_id != ADMIN_MAX_ID:
+    if user_id not in ADMIN_MAX_IDS:
         await event.message.reply("❌ Только владелец бота может просматривать список.")
         return
 
@@ -397,7 +417,7 @@ async def forward_message(event: MessageCreated):
 async def main():
     await init_db()
     print("🤖 MAX бот запущен!")
-    print(f"👥 Админ: {ADMIN_MAX_ID}")
+    print(f"👥 Админы: {ADMIN_MAX_IDS}")
 
 
     try:

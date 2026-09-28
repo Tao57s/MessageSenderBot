@@ -25,15 +25,15 @@ from TelegramBot import (
     bot as telegram_bot,
     dp as telegram_dp,
     PLATFORM as TG_PLATFORM,
-    ADMIN_TELEGRAM_ID,
+    ADMIN_TELEGRAM_IDS,
 )
 from MaxBot import (
     bot as max_bot,
     dp as max_dp,
     PLATFORM as MAX_PLATFORM,
-    ADMIN_MAX_ID,
+    ADMIN_MAX_IDS,
 )
-from VkBot import vk_bot, PLATFORM as VK_PLATFORM, ADMIN_VK_ID
+from VkBot import vk_bot, PLATFORM as VK_PLATFORM, ADMIN_VK_IDS
 
 # Настройка логирования
 # Попробуем принудительно перевести stdout в UTF-8, чтобы избежать ошибок
@@ -86,16 +86,17 @@ class BotManager:
         # Администраторы должны быть доступны сразу после запуска,
         # иначе они не смогут пользоваться командами до ручного добавления.
         admins = (
-            (TG_PLATFORM, ADMIN_TELEGRAM_ID),
-            (MAX_PLATFORM, ADMIN_MAX_ID),
-            (VK_PLATFORM, ADMIN_VK_ID),
+            (TG_PLATFORM, ADMIN_TELEGRAM_IDS),
+            (MAX_PLATFORM, ADMIN_MAX_IDS),
+            (VK_PLATFORM, ADMIN_VK_IDS),
         )
-        for platform, admin_id in admins:
-            added = await add_user(platform, admin_id)
-            if added:
-                logger.info(f"✅ Администратор {admin_id} добавлен в БД ({platform})")
-            else:
-                logger.info(f"ℹ️ Администратор {admin_id} уже есть в БД ({platform})")
+        for platform, admin_list in admins:
+            for admin_id in admin_list:
+                added = await add_user(platform, admin_id)
+                if added:
+                    logger.info(f"✅ Администратор {admin_id} добавлен в БД ({platform})")
+                else:
+                    logger.info(f"ℹ️ Администратор {admin_id} уже есть в БД ({platform})")
         
         # Регистрация ботов
         if ENABLE_TELEGRAM:
