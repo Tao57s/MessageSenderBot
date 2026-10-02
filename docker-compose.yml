@@ -24,6 +24,14 @@ services:
       - .env
     environment:
       LOG_FILE: /app/logs/bot_system.log
+    dns:
+      - 8.8.8.8        # Google
+      - 1.1.1.1        # Cloudflare
+      - 77.88.8.8      # Яндекс (резерв, вы проверили — работает)
+    dns_opt:
+      - ndots:1
+      - timeout:2
+      - attempts:3
     depends_on:
       db:
         condition: service_healthy
